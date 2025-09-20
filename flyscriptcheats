@@ -1,11 +1,10 @@
--- Enhanced Noclip Flight Script with Mobile Controls
+- Enhanced Noclip Flight Script with Mobile Controls
 -- Based on original by @CloneTrooper1019
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
-local GuiService = game:GetService("GuiService")
 
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
@@ -247,48 +246,63 @@ ToggleButton.MouseButton1Click:Connect(function()
     end
 end)
 
--- Main flight function (same as before)
+-- Main flight function - FIXED VERSION
 local function FlyCharacter()
     local Character = Player.Character
-    if not Character then return end
-    
+    if not Character or not isEnabled then return end
+
     local Humanoid = Character:FindFirstChildOfClass("Humanoid")
     local HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
     
     if not Humanoid or not HumanoidRootPart then return end
     
+    -- Store original state
     local WasAnchored = HumanoidRootPart.Anchored
     local WasPlatformStand = Humanoid.PlatformStand
     
+    -- Setup for flight
     HumanoidRootPart.Anchored = true
     Humanoid.PlatformStand = true
     Humanoid.AutoRotate = false
-    
-    local connection
-    connection = RunService.Heartbeat:Connect(function(deltaTime)
-        if not isEnabled or not Character or not HumanoidRootPart then
-            connection:Disconnect()
+
+    -- Create a new Heartbeat connection for smooth movement
+    local flightConnection
+    flightConnection = RunService.Heartbeat:Connect(function(deltaTime)
+        -- Check if we should still be flying
+        if not isEnabled or not Character or not HumanoidRootPart or HumanoidRootPart.Parent ~= Character then
+            if flightConnection then
+                flightConnection:Disconnect()
+            end
             return
         end
-        
-        local CameraCFrame = Camera.CFrame
-        local LookVector = CameraCFrame.LookVector
-        local RightVector = CameraCFrame.RightVector
-        local UpVector = Vector3.new(0, 1, 0)
-        
-        local Movement = Vector3.new()
-        Movement += RightVector * MoveDirection.X
-        Movement += LookVector * MoveDirection.Z
-        Movement += UpVector * MoveDirection.Y
-        
-        if Movement.Magnitude > 0 then
-            Movement = Movement.Unit * CurrentSpeed * deltaTime
+
+        -- Calculate movement based on camera orientation (ONLY if a direction is set)
+        if MoveDirection.Magnitude > 0 then
+            local CameraCFrame = Camera.CFrame
+            local LookVector = CameraCFrame.LookVector
+            local RightVector = CameraCFrame.RightVector
+            local UpVector = Vector3.new(0, 1, 0)
+            
+            -- Calculate final movement direction
+            local Movement = Vector3.new()
+            Movement = Movement + (RightVector * MoveDirection.X)
+            Movement = Movement + (LookVector * MoveDirection.Z)
+            Movement = Movement + (UpVector * MoveDirection.Y)
+            
+            -- Normalize and apply speed
+            if Movement.Magnitude > 0 then
+                Movement = Movement.Unit * CurrentSpeed * deltaTime
+                -- Apply movement to the character
+                HumanoidRootPart.CFrame = HumanoidRootPart.CFrame + Movement
+            end
         end
-        
-        HumanoidRootPart.CFrame = HumanoidRootPart.CFrame + Movement
     end)
     
+    -- Cleanup function
     return function()
+        if flightConnection then
+            flightConnection:Disconnect()
+        end
         if HumanoidRootPart and HumanoidRootPart.Parent then
             HumanoidRootPart.Anchored = WasAnchored
             HumanoidRootPart.Velocity = Vector3.new()
@@ -297,6 +311,8 @@ local function FlyCharacter()
             Humanoid.PlatformStand = WasPlatformStand
             Humanoid.AutoRotate = true
         end
+        -- Reset movement direction
+        MoveDirection = Vector3.new()
     end
 end
 
